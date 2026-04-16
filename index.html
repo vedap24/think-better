@@ -396,6 +396,46 @@ h1 .accent { color: var(--accent); }
 }
 .thanks-count strong { color: var(--accent); }
 
+/* ── FEEDBACK BOX (Phase 2) ── */
+.feedback-box {
+  max-width: 480px; width: 100%; margin: 0 auto 32px;
+  text-align: center;
+  opacity: 0; transform: translateY(12px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.feedback-box.show { opacity:1; transform:translateY(0); }
+
+.feedback-q {
+  font-size: 12px; color: var(--muted2);
+  margin-bottom: 14px; letter-spacing: 0.3px;
+}
+.feedback-btns {
+  display: flex; gap: 10px; justify-content: center;
+}
+.btn-feedback {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: transparent;
+  border: 1px solid var(--border-lit);
+  color: var(--text);
+  font-family: 'DM Mono', monospace; font-size: 12px;
+  padding: 11px 24px; border-radius: 10px; cursor: pointer;
+  min-height: 44px; letter-spacing: 0.3px;
+  transition: border-color 0.2s, background 0.2s, transform 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-feedback:hover { border-color: var(--accent); background: var(--accent-dim); }
+.btn-feedback:active { transform: scale(0.96); }
+.btn-feedback.selected-yes {
+  border-color: #10b981; background: rgba(16,185,129,0.1); color: #10b981;
+}
+.btn-feedback.selected-no {
+  border-color: #ef4444; background: rgba(239,68,68,0.1); color: #ef4444;
+}
+.feedback-thanks {
+  font-size: 11px; color: var(--muted);
+  margin-top: 10px; min-height: 16px; letter-spacing: 0.3px;
+}
+
 .site-footer {
   position: relative; z-index: 1;
   border-top: 1px solid var(--border);
@@ -495,6 +535,16 @@ h1 .accent { color: var(--accent); }
       <div class="done-streak">
         Current streak: <strong id="doneStreakCount">—</strong> days
       </div>
+    </div>
+
+    <!-- PHASE 2: feedback — shown after pattern unlock, before CTA -->
+    <div class="feedback-box" id="feedbackBox">
+      <div class="feedback-q">Did this help you think differently?</div>
+      <div class="feedback-btns">
+        <button class="btn-feedback" id="btnYes">👍 Yes, it did</button>
+        <button class="btn-feedback" id="btnNo">👎 Not really</button>
+      </div>
+      <div class="feedback-thanks" id="feedbackThanks"></div>
     </div>
 
     <div class="cta-box" id="ctaBox">
@@ -697,12 +747,27 @@ if (streak > 1) {
 }
 
 /* ═══════════════════════════════════════
-   TRACKING
+   SHEETS URL — single source of truth
+   Same URL handles both email signups and behaviour events
+   Apps Script reads the "event" field to route them
+═══════════════════════════════════════ */
+const SHEETS_URL = "https://script.google.com/macros/s/AKfycbwIPKfppfmegF_wPqehkM7g4oZEKme4PSfduNbn10vYbpyxxCmoEIyWTfOKtxxdxh0g6Q/exec";
+
+/* ═══════════════════════════════════════
+   TRACKING — Phase 2: sends every event to Sheets
+   Events: demo_started, step_completed, demo_completed,
+           feedback_given, join_attempt, joined_waitlist
 ═══════════════════════════════════════ */
 const track = {
   started: false, stepsCompleted: 0, completed: false, joined: false,
   log(evt, data = {}) {
-    console.log(`[ThinkBetter] ${evt}`, { ...data, ts: new Date().toISOString() });
+    const payload = { event: evt, ...data, ts: new Date().toISOString() };
+    console.log(`[ThinkBetter] ${evt}`, payload);
+    /* fire-and-forget — never blocks the UI */
+    fetch(SHEETS_URL, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }).catch(() => { /* silent fail */ });
   }
 };
 
@@ -801,25 +866,32 @@ function finishDemo() {
    alreadyDone = false → shows pattern + CTA
 ═══════════════════════════════════════ */
 function triggerReflection(alreadyDone) {
-  /* reset all */
-  ['refLine1','patternBox','ctaBox','doneTodayBox'].forEach(id => {
+  /* reset all animated elements */
+  ['refLine1','patternBox','feedbackBox','ctaBox','doneTodayBox'].forEach(id => {
     document.getElementById(id).classList.remove('show');
   });
+  /* reset feedback button states */
+  document.getElementById('btnYes').className = 'btn-feedback';
+  document.getElementById('btnNo').className  = 'btn-feedback';
+  document.getElementById('feedbackThanks').textContent = '';
 
   if (alreadyDone) {
     document.getElementById('doneStreakCount').textContent = streak;
     document.getElementById('doneTodayBox').style.display  = 'block';
+    document.getElementById('feedbackBox').style.display   = 'none';
     document.getElementById('patternBox').style.display    = 'none';
     document.getElementById('refLine1').style.display      = 'none';
     setTimeout(() => document.getElementById('doneTodayBox').classList.add('show'), 300);
     setTimeout(() => document.getElementById('ctaBox').classList.add('show'), 1200);
   } else {
     document.getElementById('doneTodayBox').style.display = 'none';
+    document.getElementById('feedbackBox').style.display  = 'block';
     document.getElementById('patternBox').style.display   = 'block';
     document.getElementById('refLine1').style.display     = 'block';
-    setTimeout(() => document.getElementById('refLine1').classList.add('show'),  400);
+    setTimeout(() => document.getElementById('refLine1').classList.add('show'),   400);
     setTimeout(() => document.getElementById('patternBox').classList.add('show'), 1400);
-    setTimeout(() => document.getElementById('ctaBox').classList.add('show'),     2600);
+    setTimeout(() => document.getElementById('feedbackBox').classList.add('show'),2400);
+    setTimeout(() => document.getElementById('ctaBox').classList.add('show'),     3400);
   }
 }
 
@@ -854,9 +926,31 @@ document.getElementById('screen-demo').addEventListener('click', (e) => {
 });
 
 /* ═══════════════════════════════════════
+   FEEDBACK BUTTONS (Phase 2)
+═══════════════════════════════════════ */
+function handleFeedback(answer) {
+  const btnYes    = document.getElementById('btnYes');
+  const btnNo     = document.getElementById('btnNo');
+  const thanks    = document.getElementById('feedbackThanks');
+
+  /* visual state */
+  btnYes.className = answer === 'yes' ? 'btn-feedback selected-yes' : 'btn-feedback';
+  btnNo.className  = answer === 'no'  ? 'btn-feedback selected-no'  : 'btn-feedback';
+  btnYes.disabled  = true;
+  btnNo.disabled   = true;
+
+  thanks.textContent = answer === 'yes'
+    ? 'Good — keep going tomorrow.'
+    : 'Noted. We\'ll improve it.';
+
+  track.log('feedback_given', { answer, day: clampedDay, streak });
+}
+
+document.getElementById('btnYes').addEventListener('click', () => handleFeedback('yes'));
+document.getElementById('btnNo').addEventListener('click',  () => handleFeedback('no'));
+
+/* ═══════════════════════════════════════
    WAITLIST FORM
-   — removed simulated delay (real fetch is live)
-   — still falls through to thank you on error
 ═══════════════════════════════════════ */
 document.getElementById('waitlistForm').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -869,19 +963,17 @@ document.getElementById('waitlistForm').addEventListener('submit', async (e) => 
   track.log('join_attempt', { email });
 
   try {
-    await fetch("https://script.google.com/macros/s/AKfycbwIPKfppfmegF_wPqehkM7g4oZEKme4PSfduNbn10vYbpyxxCmoEIyWTfOKtxxdxh0g6Q/exec", {
+    await fetch(SHEETS_URL, {
       method: "POST",
-      body: JSON.stringify({ email, day: clampedDay, streak, timestamp: new Date().toISOString() })
+      body: JSON.stringify({ event: 'joined_waitlist', email, day: clampedDay, streak, timestamp: new Date().toISOString() })
     });
   } catch (err) {
     console.warn('[ThinkBetter] Sheet sync failed', err);
-    /* silent fail — user still proceeds */
   }
 
   joins++;
   localStorage.setItem('tb_joins', joins);
   track.joined = true;
-  track.log('joined_waitlist', { email, day: clampedDay, streak });
   document.getElementById('joinCount').textContent = joins.toLocaleString();
   showScreen('screen-thanks');
 
