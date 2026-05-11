@@ -19,3 +19,10 @@
   "background_color": "#000000",
   "display": "standalone"
 }
+
+{
+  "icons": [
+    { "src": "/favicon/web-app-manifest-192x192.png", "sizes": "192x192" },
+    { "src": "/favicon/web-app-manifest-512x512.png", "sizes": "512x512" }
+  ]
+}
